@@ -1,9 +1,6 @@
+// Only MT for now — additional methods (UT, RT, PT, VT) come later.
 export const NDT_METHODS = [
-  { code: "UT", label: "Ultrasonic Testing (UT)" },
-  { code: "RT", label: "Radiographic Testing (RT)" },
   { code: "MT", label: "Magnetic Particle (MT)" },
-  { code: "PT", label: "Liquid Penetrant (PT)" },
-  { code: "VT", label: "Visual Testing (VT)" },
 ];
 
 export const STATUS = {

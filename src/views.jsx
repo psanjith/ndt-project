@@ -9,12 +9,15 @@ import {
   startInspection,
   completeInspection,
   listMyInspectors,
+  saveReport,
 } from "./api.js";
+import { ExaminationReport } from "./reportForm.jsx";
 
 /* ===================== CLIENT ===================== */
 export function ClientView({ profile }) {
   const { requests } = useRequests(profile);
-  const [form, setForm] = useState({ project: "", site: "", method: "UT", requestedDate: "", notes: "" });
+  const [reportFor, setReportFor] = useState(null);
+  const [form, setForm] = useState({ project: "", site: "", method: "MT", requestedDate: "", notes: "" });
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState(null);
   const set = (k) => (e) => setForm({ ...form, [k]: e.target.value });
@@ -26,7 +29,7 @@ export function ClientView({ profile }) {
     setErr(null);
     try {
       await createRequest(profile, form);
-      setForm({ project: "", site: "", method: "UT", requestedDate: "", notes: "" });
+      setForm({ project: "", site: "", method: "MT", requestedDate: "", notes: "" });
     } catch (e2) {
       setErr(e2.message);
     } finally {
@@ -78,9 +81,18 @@ export function ClientView({ profile }) {
                 <span className="font-medium text-slate-700">Inspector notes:</span> {r.inspector_notes}
               </div>
             )}
+            {r.report && (
+              <button onClick={() => setReportFor(r)} className="mt-3 text-sm font-medium text-slate-700 underline">
+                View examination report
+              </button>
+            )}
           </div>
         ))}
       </div>
+
+      {reportFor && (
+        <ExaminationReport request={reportFor} readOnly onClose={() => setReportFor(null)} />
+      )}
     </div>
   );
 }
@@ -192,6 +204,7 @@ function CompanyJobCard({ r, profile }) {
 /* ===================== INSPECTOR ===================== */
 export function InspectorView({ profile }) {
   const { requests } = useRequests(profile);
+  const [reportFor, setReportFor] = useState(null);
   const todo = requests.filter((r) => r.status !== STATUS.COMPLETED);
   const done = requests.filter((r) => r.status === STATUS.COMPLETED);
 
@@ -210,17 +223,31 @@ export function InspectorView({ profile }) {
           <h2 className="font-semibold text-slate-800 mb-3">Completed <span className="text-slate-400">({done.length})</span></h2>
           <div className="grid md:grid-cols-2 gap-4">
             {done.map((r) => (
-              <div key={r.id} className="bg-white rounded-xl shadow-sm border border-slate-200 p-4 opacity-90">
+              <div key={r.id} className="bg-white rounded-xl shadow-sm border border-slate-200 p-4">
                 <div className="flex items-start justify-between gap-2">
                   <div className="font-semibold text-slate-800">{r.project}</div>
                   <ResultBadge result={r.result} />
                 </div>
                 <div className="text-sm text-slate-500">{r.client_org_name} · {r.site}</div>
                 {r.inspector_notes && <p className="mt-2 text-sm text-slate-600">{r.inspector_notes}</p>}
+                <div className="mt-3 flex items-center gap-2">
+                  <button onClick={() => setReportFor(r)} className={btnPrimary + " text-sm"}>
+                    {r.report ? "Edit examination report" : "Fill examination report"}
+                  </button>
+                  {r.report && <span className="text-xs text-emerald-600 font-medium">✓ Report on file</span>}
+                </div>
               </div>
             ))}
           </div>
         </section>
+      )}
+
+      {reportFor && (
+        <ExaminationReport
+          request={reportFor}
+          onSave={(report) => saveReport(reportFor.id, report)}
+          onClose={() => setReportFor(null)}
+        />
       )}
     </div>
   );

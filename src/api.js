@@ -89,6 +89,14 @@ export async function completeInspection(id, result, notes) {
   if (error) throw error;
 }
 
+export async function saveReport(id, report) {
+  const { error } = await supabase
+    .from("inspection_requests")
+    .update({ report })
+    .eq("id", id);
+  if (error) throw error;
+}
+
 /** Inspectors in the dispatcher's own company (RLS allows same-org reads). */
 export async function listMyInspectors(profile) {
   const { data, error } = await supabase
