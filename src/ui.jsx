@@ -54,3 +54,26 @@ export function fmtDate(iso) {
   if (!iso) return "—";
   return new Date(iso).toLocaleDateString(undefined, { month: "short", day: "numeric", year: "numeric" });
 }
+
+export function fmtDateTime(iso) {
+  if (!iso) return "—";
+  return new Date(iso).toLocaleString(undefined, {
+    month: "short",
+    day: "numeric",
+    hour: "numeric",
+    minute: "2-digit",
+  });
+}
+
+// Convert a stored ISO timestamp to the value a <input type="datetime-local"> wants.
+export function toLocalInput(iso) {
+  if (!iso) return "";
+  const d = new Date(iso);
+  const local = new Date(d.getTime() - d.getTimezoneOffset() * 60000);
+  return local.toISOString().slice(0, 16);
+}
+
+// Convert a datetime-local input value back to an ISO timestamp for storage.
+export function fromLocalInput(local) {
+  return local ? new Date(local).toISOString() : null;
+}

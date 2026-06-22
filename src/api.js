@@ -60,7 +60,7 @@ export async function claimRequest(profile, id) {
   if (error) throw error;
 }
 
-export async function assignInspector(id, inspector, scheduledDate) {
+export async function assignInspector(id, inspector, scheduledDate, eta) {
   const { error } = await supabase
     .from("inspection_requests")
     .update({
@@ -68,7 +68,16 @@ export async function assignInspector(id, inspector, scheduledDate) {
       inspector_id: inspector.id,
       inspector_name: inspector.full_name,
       scheduled_date: scheduledDate || null,
+      eta: eta || null,
     })
+    .eq("id", id);
+  if (error) throw error;
+}
+
+export async function updateEta(id, eta) {
+  const { error } = await supabase
+    .from("inspection_requests")
+    .update({ eta: eta || null })
     .eq("id", id);
   if (error) throw error;
 }

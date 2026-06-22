@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from "react";
 import { NDT_METHODS, STATUS } from "./constants.js";
-import { Badge, ResultBadge, Field, Empty, Info, fmtDate, inputCls, btnPrimary } from "./ui.jsx";
+import { Badge, ResultBadge, Field, Empty, Info, fmtDate, fmtDateTime, toLocalInput, fromLocalInput, inputCls, btnPrimary } from "./ui.jsx";
 import {
   useRequests,
   createRequest,
@@ -10,6 +10,7 @@ import {
   completeInspection,
   listMyInspectors,
   saveReport,
+  updateEta,
 } from "./api.js";
 import { ExaminationReport } from "./reportForm.jsx";
 
@@ -76,6 +77,11 @@ export function ClientView({ profile }) {
               <Info label="Inspection Co." value={r.inspection_org_name || "—"} />
               <Info label="Scheduled" value={fmtDate(r.scheduled_date)} />
             </div>
+            {r.eta && r.status !== "completed" && (
+              <div className="mt-3 text-sm bg-blue-50 text-blue-800 rounded-lg px-3 py-2 border border-blue-100">
+                🚚 Inspector expected on site: <span className="font-semibold">{fmtDateTime(r.eta)}</span>
+              </div>
+            )}
             {r.result && r.inspector_notes && (
               <div className="mt-3 text-sm bg-slate-50 rounded-lg p-3 text-slate-600">
                 <span className="font-medium text-slate-700">Inspector notes:</span> {r.inspector_notes}
@@ -150,6 +156,7 @@ function CompanyJobCard({ r, profile }) {
   const [inspectors, setInspectors] = useState([]);
   const [inspectorId, setInspectorId] = useState("");
   const [date, setDate] = useState(r.requested_date || "");
+  const [eta, setEta] = useState(toLocalInput(r.eta));
   const [busy, setBusy] = useState(false);
 
   useEffect(() => {
@@ -160,8 +167,15 @@ function CompanyJobCard({ r, profile }) {
     const insp = inspectors.find((i) => i.id === inspectorId);
     if (!insp) return;
     setBusy(true);
-    try { await assignInspector(r.id, insp, date); } finally { setBusy(false); }
+    try { await assignInspector(r.id, insp, date, fromLocalInput(eta)); } finally { setBusy(false); }
   };
+
+  const saveEta = async () => {
+    setBusy(true);
+    try { await updateEta(r.id, fromLocalInput(eta)); } finally { setBusy(false); }
+  };
+
+  const canEditEta = r.status === STATUS.ASSIGNED || r.status === STATUS.IN_PROGRESS;
 
   return (
     <div className="bg-white rounded-xl shadow-sm border border-slate-200 p-4">
@@ -172,30 +186,51 @@ function CompanyJobCard({ r, profile }) {
         </div>
         <div className="flex gap-2 items-center"><ResultBadge result={r.result} /><Badge status={r.status} /></div>
       </div>
-      <div className="mt-2 grid grid-cols-3 gap-2 text-sm">
+      <div className="mt-2 grid grid-cols-2 sm:grid-cols-4 gap-2 text-sm">
         <Info label="Method" value={r.method} />
         <Info label="Inspector" value={r.inspector_name || "—"} />
         <Info label="Scheduled" value={fmtDate(r.scheduled_date)} />
+        <Info label="Arrival ETA" value={fmtDateTime(r.eta)} />
       </div>
 
       {r.status === STATUS.CLAIMED && (
-        <div className="mt-4 flex flex-wrap gap-2 items-end">
-          <div className="flex-1 min-w-[140px]">
-            <Field label="Assign inspector">
-              <select className={inputCls} value={inspectorId} onChange={(e) => setInspectorId(e.target.value)}>
-                <option value="">Select…</option>
-                {inspectors.map((i) => <option key={i.id} value={i.id}>{i.full_name}</option>)}
-              </select>
-            </Field>
+        <div className="mt-4 space-y-3">
+          <div className="flex flex-wrap gap-2 items-end">
+            <div className="flex-1 min-w-[140px]">
+              <Field label="Assign inspector">
+                <select className={inputCls} value={inspectorId} onChange={(e) => setInspectorId(e.target.value)}>
+                  <option value="">Select…</option>
+                  {inspectors.map((i) => <option key={i.id} value={i.id}>{i.full_name}</option>)}
+                </select>
+              </Field>
+            </div>
+            <div className="min-w-[130px]">
+              <Field label="Schedule"><input type="date" className={inputCls} value={date} onChange={(e) => setDate(e.target.value)} /></Field>
+            </div>
           </div>
-          <div className="min-w-[140px]">
-            <Field label="Schedule"><input type="date" className={inputCls} value={date} onChange={(e) => setDate(e.target.value)} /></Field>
+          <div className="flex flex-wrap gap-2 items-end">
+            <div className="flex-1 min-w-[180px]">
+              <Field label="Est. arrival on site (shared with client)">
+                <input type="datetime-local" className={inputCls} value={eta} onChange={(e) => setEta(e.target.value)} />
+              </Field>
+            </div>
+            <button onClick={assign} disabled={!inspectorId || busy} className={btnPrimary}>{busy ? "…" : "Assign"}</button>
           </div>
-          <button onClick={assign} disabled={!inspectorId || busy} className={btnPrimary}>{busy ? "…" : "Assign"}</button>
+          {inspectors.length === 0 && (
+            <p className="text-xs text-amber-600">No inspectors in your company yet. Share your join code so an inspector can join.</p>
+          )}
         </div>
       )}
-      {r.status === STATUS.CLAIMED && inspectors.length === 0 && (
-        <p className="mt-2 text-xs text-amber-600">No inspectors in your company yet. Share your join code so an inspector can join.</p>
+
+      {canEditEta && (
+        <div className="mt-4 flex flex-wrap gap-2 items-end border-t border-slate-100 pt-3">
+          <div className="flex-1 min-w-[180px]">
+            <Field label="Update arrival estimate (shared with client)">
+              <input type="datetime-local" className={inputCls} value={eta} onChange={(e) => setEta(e.target.value)} />
+            </Field>
+          </div>
+          <button onClick={saveEta} disabled={busy} className={btnPrimary}>{busy ? "…" : "Update ETA"}</button>
+        </div>
       )}
     </div>
   );
@@ -269,9 +304,10 @@ function InspectorCard({ r }) {
         </div>
         <Badge status={r.status} />
       </div>
-      <div className="mt-2 grid grid-cols-2 gap-2 text-sm">
+      <div className="mt-2 grid grid-cols-2 sm:grid-cols-3 gap-2 text-sm">
         <Info label="Method" value={r.method} />
         <Info label="Scheduled" value={fmtDate(r.scheduled_date)} />
+        <Info label="Arrival ETA" value={fmtDateTime(r.eta)} />
       </div>
       {r.notes && <p className="mt-2 text-sm text-slate-500 italic">Client: "{r.notes}"</p>}
 
