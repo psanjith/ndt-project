@@ -8,3 +8,31 @@ body {
   margin: 0;
   background: #f1f5f9;
 }
+
+/* The print document is rendered into <body> (via a portal). On screen it is
+   hidden off-screen (NOT display:none, so images still load). When printing we
+   hide the live app (#root) and let this document flow statically so it
+   paginates correctly across multiple pages. */
+.print-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+}
+
+@media print {
+  #root {
+    display: none !important;
+  }
+  .print-only {
+    position: static;
+    width: auto;
+    height: auto;
+    overflow: visible;
+    clip-path: none;
+  }
+  @page {
+    margin: 12mm;
+  }
+}

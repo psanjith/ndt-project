@@ -106,6 +106,58 @@ export async function saveReport(id, report) {
   if (error) throw error;
 }
 
+/* ---------- Report photos (Supabase Storage) ---------- */
+const PHOTO_BUCKET = "report-photos";
+
+export async function uploadReportPhoto(requestId, file) {
+  const ext = (file.name.split(".").pop() || "jpg").toLowerCase();
+  const path = `${requestId}/${crypto.randomUUID()}.${ext}`;
+  const { error } = await supabase.storage
+    .from(PHOTO_BUCKET)
+    .upload(path, file, { contentType: file.type || undefined, upsert: false });
+  if (error) throw error;
+  return path;
+}
+
+/** Returns a { path: signedUrl } map for displaying private photos. */
+export async function getSignedUrls(paths) {
+  if (!paths || paths.length === 0) return {};
+  const { data, error } = await supabase.storage.from(PHOTO_BUCKET).createSignedUrls(paths, 3600);
+  if (error) throw error;
+  const map = {};
+  (data || []).forEach((d) => {
+    if (d.signedUrl) map[d.path] = d.signedUrl;
+  });
+  return map;
+}
+
+export async function removeReportPhoto(path) {
+  const { error } = await supabase.storage.from(PHOTO_BUCKET).remove([path]);
+  if (error) throw error;
+}
+
+/** Downloads photos and returns a { path: base64DataUrl } map for printing. */
+export async function getPhotoDataUrls(paths) {
+  const out = {};
+  await Promise.all(
+    (paths || []).map(async (path) => {
+      try {
+        const { data, error } = await supabase.storage.from(PHOTO_BUCKET).download(path);
+        if (error || !data) return;
+        out[path] = await new Promise((resolve) => {
+          const fr = new FileReader();
+          fr.onload = () => resolve(fr.result);
+          fr.onerror = () => resolve(null);
+          fr.readAsDataURL(data);
+        });
+      } catch {
+        /* skip */
+      }
+    })
+  );
+  return out;
+}
+
 /** Inspectors in the dispatcher's own company (RLS allows same-org reads). */
 export async function listMyInspectors(profile) {
   const { data, error } = await supabase
