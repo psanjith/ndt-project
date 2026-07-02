@@ -48,6 +48,62 @@ export async function createRequest(profile, form) {
   if (error) throw error;
 }
 
+/** Client creates a work order (the inspection request). Goes out as 'open'. */
+export async function createWorkOrder(profile, f) {
+  const methods = f.methods || [];
+  const { error } = await supabase.from("inspection_requests").insert({
+    client_org_id: profile.org_id,
+    client_org_name: profile.organization?.name || f.clientName || "Client",
+    created_by: profile.id,
+    // client info
+    client_name: f.clientName || null,
+    client_address: f.clientAddress || null,
+    client_contact: f.clientContact || null,
+    client_phone: f.clientPhone || null,
+    client_email: f.clientEmail || null,
+    // job info
+    date_of_request: f.dateOfRequest || null,
+    required_datetime: f.requiredDateTime || null,
+    items_for_inspection: f.items || null,
+    directions: f.directions || null,
+    special_instructions: f.special || null,
+    methods,
+    // reused fields so existing display + report code keeps working
+    project: f.items || "Inspection",
+    site: f.clientAddress || "",
+    method: methods[0] || null,
+    requested_date: f.dateOfRequest || null,
+    notes: f.special || null,
+    status: STATUS.OPEN,
+  });
+  if (error) throw error;
+}
+
+/** Dispatcher: save a quote amount on a work order. */
+export async function setQuote(id, amount) {
+  const { error } = await supabase
+    .from("inspection_requests")
+    .update({ quote_amount: amount === "" || amount == null ? null : Number(amount) })
+    .eq("id", id);
+  if (error) throw error;
+}
+
+/** Dispatcher: generate the next work order number for a company code. */
+export async function generateWorkOrderNo(companyCode) {
+  const { data, error } = await supabase.rpc("next_work_order_no", { p_company_code: companyCode });
+  if (error) throw error;
+  return data;
+}
+
+/** Dispatcher: persist a generated work order number on a work order. */
+export async function saveWorkOrderNo(id, no, companyCode) {
+  const { error } = await supabase
+    .from("inspection_requests")
+    .update({ work_order_no: no, company_code: (companyCode || "").toUpperCase() })
+    .eq("id", id);
+  if (error) throw error;
+}
+
 export async function claimRequest(profile, id) {
   const { error } = await supabase
     .from("inspection_requests")

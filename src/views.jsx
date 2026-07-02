@@ -1,9 +1,8 @@
 import React, { useEffect, useState } from "react";
-import { NDT_METHODS, STATUS } from "./constants.js";
+import { STATUS } from "./constants.js";
 import { Badge, ResultBadge, Field, Empty, Info, fmtDate, fmtDateTime, toLocalInput, fromLocalInput, inputCls, btnPrimary } from "./ui.jsx";
 import {
   useRequests,
-  createRequest,
   claimRequest,
   assignInspector,
   startInspection,
@@ -11,94 +10,63 @@ import {
   listMyInspectors,
   saveReport,
   updateEta,
+  setQuote,
+  generateWorkOrderNo,
+  saveWorkOrderNo,
 } from "./api.js";
 import { ExaminationReport } from "./reportForm.jsx";
+import { WorkOrderForm } from "./workOrder.jsx";
 
-/* ===================== CLIENT ===================== */
+const methodsText = (r) => (r.methods && r.methods.length ? r.methods.join(", ") : r.method || "—");
+const money = (n) => (n == null ? "—" : "$" + Number(n).toFixed(2));
+
+/* ===================== CLIENT (read-only) ===================== */
 export function ClientView({ profile }) {
   const { requests } = useRequests(profile);
   const [reportFor, setReportFor] = useState(null);
-  const [form, setForm] = useState({ project: "", site: "", method: "MT", requestedDate: "", notes: "" });
-  const [busy, setBusy] = useState(false);
-  const [err, setErr] = useState(null);
-  const set = (k) => (e) => setForm({ ...form, [k]: e.target.value });
-
-  const submit = async (e) => {
-    e.preventDefault();
-    if (!form.project || !form.site) return;
-    setBusy(true);
-    setErr(null);
-    try {
-      await createRequest(profile, form);
-      setForm({ project: "", site: "", method: "MT", requestedDate: "", notes: "" });
-    } catch (e2) {
-      setErr(e2.message);
-    } finally {
-      setBusy(false);
-    }
-  };
 
   return (
-    <div className="grid md:grid-cols-5 gap-6">
-      <div className="md:col-span-2">
-        <div className="bg-white rounded-xl shadow-sm border border-slate-200 p-5">
-          <h2 className="font-semibold text-slate-800 mb-4">Request an Inspection</h2>
-          <form onSubmit={submit} className="space-y-4">
-            <Field label="Project"><input className={inputCls} value={form.project} onChange={set("project")} placeholder="Tower B – Weld joints" /></Field>
-            <Field label="Site address"><input className={inputCls} value={form.site} onChange={set("site")} placeholder="1200 Harbor Rd, Unit 4" /></Field>
-            <Field label="NDT method">
-              <select className={inputCls} value={form.method} onChange={set("method")}>
-                {NDT_METHODS.map((m) => <option key={m.code} value={m.code}>{m.label}</option>)}
-              </select>
-            </Field>
-            <Field label="Requested date"><input type="date" className={inputCls} value={form.requestedDate} onChange={set("requestedDate")} /></Field>
-            <Field label="Notes"><textarea className={inputCls} rows="2" value={form.notes} onChange={set("notes")} placeholder="Access details, scope, etc." /></Field>
-            {err && <p className="text-sm text-rose-600">{err}</p>}
-            <button disabled={busy} className={btnPrimary + " w-full"}>{busy ? "…" : "Submit request"}</button>
-          </form>
-        </div>
-      </div>
+    <div className="space-y-6 max-w-3xl">
+      <WorkOrderForm profile={profile} />
 
-      <div className="md:col-span-3 space-y-3">
-        <h2 className="font-semibold text-slate-800">My Requests</h2>
-        {requests.length === 0 && <Empty>No requests yet. Submit one to get started.</Empty>}
-        {requests.map((r) => (
-          <div key={r.id} className="bg-white rounded-xl shadow-sm border border-slate-200 p-4">
-            <div className="flex items-start justify-between gap-3">
-              <div>
-                <div className="font-semibold text-slate-800">{r.project}</div>
-                <div className="text-sm text-slate-500">{r.site}</div>
-              </div>
-              <div className="flex gap-2 items-center"><ResultBadge result={r.result} /><Badge status={r.status} /></div>
-            </div>
-            <div className="mt-3 grid grid-cols-2 sm:grid-cols-4 gap-2 text-sm">
-              <Info label="Method" value={r.method} />
-              <Info label="Requested" value={fmtDate(r.requested_date)} />
-              <Info label="Inspection Co." value={r.inspection_org_name || "—"} />
-              <Info label="Scheduled" value={fmtDate(r.scheduled_date)} />
-            </div>
-            {r.eta && r.status !== "completed" && (
-              <div className="mt-3 text-sm bg-blue-50 text-blue-800 rounded-lg px-3 py-2 border border-blue-100">
-                🚚 Inspector expected on site: <span className="font-semibold">{fmtDateTime(r.eta)}</span>
-              </div>
-            )}
-            {r.result && r.inspector_notes && (
-              <div className="mt-3 text-sm bg-slate-50 rounded-lg p-3 text-slate-600">
-                <span className="font-medium text-slate-700">Inspector notes:</span> {r.inspector_notes}
-              </div>
-            )}
-            {r.report && (
-              <button onClick={() => setReportFor(r)} className="mt-3 text-sm font-medium text-slate-700 underline">
-                View examination report
-              </button>
-            )}
-          </div>
-        ))}
-      </div>
-
-      {reportFor && (
-        <ExaminationReport request={reportFor} readOnly onClose={() => setReportFor(null)} />
+      <h2 className="font-semibold text-slate-800">My Work Orders</h2>
+      {requests.length === 0 && (
+        <Empty>No work orders yet. Submit one above to request an inspection.</Empty>
       )}
+      {requests.map((r) => (
+        <div key={r.id} className="bg-white rounded-xl shadow-sm border border-slate-200 p-4">
+          <div className="flex items-start justify-between gap-3">
+            <div>
+              <div className="font-semibold text-slate-800">{r.items_for_inspection || r.project}</div>
+              <div className="text-sm text-slate-500">{r.work_order_no || ""}</div>
+            </div>
+            <div className="flex gap-2 items-center"><ResultBadge result={r.result} /><Badge status={r.status} /></div>
+          </div>
+          <div className="mt-3 grid grid-cols-2 sm:grid-cols-4 gap-2 text-sm">
+            <Info label="Method(s)" value={methodsText(r)} />
+            <Info label="Inspection Co." value={r.inspection_org_name || "—"} />
+            <Info label="Scheduled" value={fmtDate(r.scheduled_date)} />
+            <Info label="Quote" value={money(r.quote_amount)} />
+          </div>
+          {r.eta && r.status !== "completed" && (
+            <div className="mt-3 text-sm bg-blue-50 text-blue-800 rounded-lg px-3 py-2 border border-blue-100">
+              🚚 Inspector expected on site: <span className="font-semibold">{fmtDateTime(r.eta)}</span>
+            </div>
+          )}
+          {r.result && r.inspector_notes && (
+            <div className="mt-3 text-sm bg-slate-50 rounded-lg p-3 text-slate-600">
+              <span className="font-medium text-slate-700">Inspector notes:</span> {r.inspector_notes}
+            </div>
+          )}
+          {r.report && (
+            <button onClick={() => setReportFor(r)} className="mt-3 text-sm font-medium text-slate-700 underline">
+              View examination report
+            </button>
+          )}
+        </div>
+      ))}
+
+      {reportFor && <ExaminationReport request={reportFor} readOnly onClose={() => setReportFor(null)} />}
     </div>
   );
 }
@@ -112,16 +80,16 @@ export function DispatcherView({ profile }) {
   return (
     <div className="space-y-8">
       <section>
-        <h2 className="font-semibold text-slate-800 mb-3">Open Jobs (marketplace) <span className="text-slate-400">({open.length})</span></h2>
-        {open.length === 0 && <Empty>No open jobs right now.</Empty>}
+        <h2 className="font-semibold text-slate-800 mb-3">Incoming Work Orders <span className="text-slate-400">({open.length})</span></h2>
+        {open.length === 0 && <Empty>No open work orders right now.</Empty>}
         <div className="grid md:grid-cols-2 gap-4">
           {open.map((r) => <OpenJobCard key={r.id} r={r} profile={profile} />)}
         </div>
       </section>
 
       <section>
-        <h2 className="font-semibold text-slate-800 mb-3">My Company's Jobs <span className="text-slate-400">({mine.length})</span></h2>
-        {mine.length === 0 && <Empty>You haven't claimed any jobs yet.</Empty>}
+        <h2 className="font-semibold text-slate-800 mb-3">My Company's Work Orders <span className="text-slate-400">({mine.length})</span></h2>
+        {mine.length === 0 && <Empty>Claim an incoming work order to start managing it.</Empty>}
         <div className="grid md:grid-cols-2 gap-4">
           {mine.map((r) => <CompanyJobCard key={r.id} r={r} profile={profile} />)}
         </div>
@@ -137,17 +105,19 @@ function OpenJobCard({ r, profile }) {
     <div className="bg-white rounded-xl shadow-sm border border-slate-200 p-4">
       <div className="flex items-start justify-between gap-2">
         <div>
-          <div className="font-semibold text-slate-800">{r.project}</div>
-          <div className="text-sm text-slate-500">{r.client_org_name} · {r.site}</div>
+          <div className="font-semibold text-slate-800">{r.items_for_inspection || r.project}</div>
+          <div className="text-sm text-slate-500">{r.client_name || r.client_org_name}</div>
         </div>
         <Badge status={r.status} />
       </div>
       <div className="mt-2 grid grid-cols-2 gap-2 text-sm">
-        <Info label="Method" value={r.method} />
-        <Info label="Requested" value={fmtDate(r.requested_date)} />
+        <Info label="Method(s)" value={methodsText(r)} />
+        <Info label="Required" value={r.required_datetime ? fmtDateTime(r.required_datetime) : fmtDate(r.requested_date)} />
       </div>
-      {r.notes && <p className="mt-2 text-sm text-slate-500 italic">"{r.notes}"</p>}
-      <button onClick={claim} disabled={busy} className={btnPrimary + " w-full mt-4"}>{busy ? "…" : "Claim job"}</button>
+      {r.client_address && <p className="mt-2 text-sm text-slate-500">📍 {r.client_address}</p>}
+      {r.directions && <p className="mt-1 text-sm text-slate-500">🧭 {r.directions}</p>}
+      {r.special_instructions && <p className="mt-1 text-sm text-slate-500 italic">"{r.special_instructions}"</p>}
+      <button onClick={claim} disabled={busy} className={btnPrimary + " w-full mt-4"}>{busy ? "…" : "Claim work order"}</button>
     </div>
   );
 }
@@ -157,11 +127,26 @@ function CompanyJobCard({ r, profile }) {
   const [inspectorId, setInspectorId] = useState("");
   const [date, setDate] = useState(r.requested_date || "");
   const [eta, setEta] = useState(toLocalInput(r.eta));
+  const [quote, setQuoteVal] = useState(r.quote_amount ?? "");
+  const [companyCode, setCompanyCode] = useState(r.company_code || "");
   const [busy, setBusy] = useState(false);
 
   useEffect(() => {
     if (r.status === STATUS.CLAIMED) listMyInspectors(profile).then(setInspectors).catch(() => {});
   }, [r.status, profile]);
+
+  const saveQuoteAmt = async () => { setBusy(true); try { await setQuote(r.id, quote); } finally { setBusy(false); } };
+  const genWorkOrderNo = async () => {
+    if (!companyCode.trim()) return;
+    setBusy(true);
+    try {
+      const no = await generateWorkOrderNo(companyCode);
+      await saveWorkOrderNo(r.id, no, companyCode);
+    } finally {
+      setBusy(false);
+    }
+  };
+  const canManage = [STATUS.CLAIMED, STATUS.ASSIGNED, STATUS.IN_PROGRESS].includes(r.status);
 
   const assign = async () => {
     const insp = inspectors.find((i) => i.id === inspectorId);
@@ -181,17 +166,46 @@ function CompanyJobCard({ r, profile }) {
     <div className="bg-white rounded-xl shadow-sm border border-slate-200 p-4">
       <div className="flex items-start justify-between gap-2">
         <div>
-          <div className="font-semibold text-slate-800">{r.project}</div>
-          <div className="text-sm text-slate-500">{r.client_org_name} · {r.site}</div>
+          <div className="font-semibold text-slate-800">{r.items_for_inspection || r.project}</div>
+          <div className="text-sm text-slate-500">{r.client_name || r.client_org_name}{r.work_order_no ? " · " + r.work_order_no : ""}</div>
         </div>
         <div className="flex gap-2 items-center"><ResultBadge result={r.result} /><Badge status={r.status} /></div>
       </div>
       <div className="mt-2 grid grid-cols-2 sm:grid-cols-4 gap-2 text-sm">
-        <Info label="Method" value={r.method} />
+        <Info label="Method(s)" value={methodsText(r)} />
         <Info label="Inspector" value={r.inspector_name || "—"} />
         <Info label="Scheduled" value={fmtDate(r.scheduled_date)} />
         <Info label="Arrival ETA" value={fmtDateTime(r.eta)} />
       </div>
+      {r.quote_amount != null && (
+        <div className="mt-2 text-sm text-slate-600">Quote: <span className="font-semibold">{money(r.quote_amount)}</span></div>
+      )}
+
+      {canManage && (
+        <div className="mt-3 border-t border-slate-100 pt-3 space-y-3">
+          <div className="flex flex-wrap gap-2 items-end">
+            <div className="min-w-[130px]">
+              <Field label="Quote ($)"><input type="number" step="0.01" min="0" className={inputCls} value={quote} onChange={(e) => setQuoteVal(e.target.value)} placeholder="0.00" /></Field>
+            </div>
+            <button onClick={saveQuoteAmt} disabled={busy} className={btnPrimary}>Save quote</button>
+          </div>
+          <div className="flex flex-wrap gap-2 items-end">
+            {r.work_order_no ? (
+              <div className="text-sm">
+                <div className="text-xs uppercase tracking-wide text-slate-400">Work Order #</div>
+                <div className="font-mono font-semibold text-slate-800">{r.work_order_no}</div>
+              </div>
+            ) : (
+              <>
+                <div className="min-w-[130px]">
+                  <Field label="Company code"><input className={inputCls} value={companyCode} onChange={(e) => setCompanyCode(e.target.value)} placeholder="ACME" /></Field>
+                </div>
+                <button onClick={genWorkOrderNo} disabled={busy || !companyCode.trim()} className={btnPrimary}>Generate Work Order #</button>
+              </>
+            )}
+          </div>
+        </div>
+      )}
 
       {r.status === STATUS.CLAIMED && (
         <div className="mt-4 space-y-3">
@@ -260,10 +274,10 @@ export function InspectorView({ profile }) {
             {done.map((r) => (
               <div key={r.id} className="bg-white rounded-xl shadow-sm border border-slate-200 p-4">
                 <div className="flex items-start justify-between gap-2">
-                  <div className="font-semibold text-slate-800">{r.project}</div>
+                  <div className="font-semibold text-slate-800">{r.items_for_inspection || r.project}</div>
                   <ResultBadge result={r.result} />
                 </div>
-                <div className="text-sm text-slate-500">{r.client_org_name} · {r.site}</div>
+                <div className="text-sm text-slate-500">{r.client_name || r.client_org_name}{r.work_order_no ? " · " + r.work_order_no : ""}</div>
                 {r.inspector_notes && <p className="mt-2 text-sm text-slate-600">{r.inspector_notes}</p>}
                 <div className="mt-3 flex items-center gap-2">
                   <button onClick={() => setReportFor(r)} className={btnPrimary + " text-sm"}>
@@ -299,17 +313,19 @@ function InspectorCard({ r }) {
     <div className="bg-white rounded-xl shadow-sm border border-slate-200 p-4">
       <div className="flex items-start justify-between gap-2">
         <div>
-          <div className="font-semibold text-slate-800">{r.project}</div>
-          <div className="text-sm text-slate-500">{r.client_org_name} · {r.site}</div>
+          <div className="font-semibold text-slate-800">{r.items_for_inspection || r.project}</div>
+          <div className="text-sm text-slate-500">{r.client_name || r.client_org_name}{r.work_order_no ? " · " + r.work_order_no : ""}</div>
         </div>
         <Badge status={r.status} />
       </div>
       <div className="mt-2 grid grid-cols-2 sm:grid-cols-3 gap-2 text-sm">
-        <Info label="Method" value={r.method} />
+        <Info label="Method(s)" value={methodsText(r)} />
         <Info label="Scheduled" value={fmtDate(r.scheduled_date)} />
         <Info label="Arrival ETA" value={fmtDateTime(r.eta)} />
       </div>
-      {r.notes && <p className="mt-2 text-sm text-slate-500 italic">Client: "{r.notes}"</p>}
+      {r.client_address && <p className="mt-2 text-sm text-slate-500">📍 {r.client_address}</p>}
+      {r.directions && <p className="mt-1 text-sm text-slate-500">🧭 {r.directions}</p>}
+      {r.special_instructions && <p className="mt-1 text-sm text-slate-500 italic">Note: "{r.special_instructions}"</p>}
 
       {r.status === STATUS.ASSIGNED && (
         <button onClick={start} disabled={busy} className="mt-4 w-full bg-indigo-600 text-white rounded-lg py-2 font-medium hover:bg-indigo-500 transition disabled:opacity-40">Start inspection</button>

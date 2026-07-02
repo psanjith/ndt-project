@@ -1,6 +1,10 @@
-// Only MT for now — additional methods (UT, RT, PT, VT) come later.
 export const NDT_METHODS = [
-  { code: "MT", label: "Magnetic Particle (MT)" },
+  { code: "MT", label: "MT — Magnetic Particle" },
+  { code: "PT", label: "PT — Liquid Penetrant" },
+  { code: "UT", label: "UT — Ultrasonic" },
+  { code: "RT", label: "RT — Radiographic" },
+  { code: "PAUT", label: "PAUT — Phased Array UT" },
+  { code: "DR", label: "DR — Digital Radiography" },
 ];
 
 export const STATUS = {
